@@ -1083,6 +1083,10 @@ def _load_pg_sql_into_dfs(
 def _load_domain_dataframes(
     domain: str, dataset_filters: Optional[set]
 ) -> Tuple[Dict[str, pl.DataFrame], Dict[str, str], Dict[str, str]]:
+    """
+    🔧 FIX: Hanya load file tabular (CSV/Excel) ke dalam dfs.
+    File PDF dan DOCX tidak akan dimasukkan ke dalam dataframe dictionary.
+    """
     dfs: Dict[str, pl.DataFrame] = {}
     data_info: Dict[str, str] = {}
     data_describe: Dict[str, str] = {}
@@ -1096,17 +1100,19 @@ def _load_domain_dataframes(
             if isinstance(token, str) and token.startswith("pg:"):
                 _pg_targets.append(token)
 
-    # GCS first
+    # GCS first - HANYA UNTUK FILE TABULAR (CSV/EXCEL)
     try:
         if GCS_BUCKET:
-            for b in list_gcs_tabulars(domain):  # ✅ a0.0.8 (CSV + Excel)
+            for b in list_gcs_tabulars(domain):
                 name_lower = b.name.lower()
+                # 🔧 FIX: Skip file PDF dan DOCX, hanya proses CSV dan Excel
                 if not (name_lower.endswith(".csv") or name_lower.endswith(".xlsx") or name_lower.endswith(".xls")):
                     continue
                 key = os.path.basename(b.name)
                 if dataset_filters and key not in dataset_filters and not key.startswith("pg:"):
                     continue
-                df = read_gcs_tabular_to_pl_df(b.name)  # ✅ a0.0.8
+                # Load tabular file ke dataframe
+                df = read_gcs_tabular_to_pl_df(b.name)
                 dfs[key] = df
                 info_str = _polars_info_string(df)
                 data_info[key] = info_str
@@ -1118,10 +1124,11 @@ def _load_domain_dataframes(
     except Exception:
         pass
 
-    # Local fallback (CSV + Excel)
+    # Local fallback - HANYA UNTUK FILE TABULAR (CSV/EXCEL)
     domain_dir = ensure_dir(os.path.join(DATASETS_ROOT, slug(domain)))
     for name in sorted(os.listdir(domain_dir)):
         name_l = name.lower()
+        # 🔧 FIX: Skip file PDF dan DOCX, hanya proses CSV dan Excel
         if not (name_l.endswith(".csv") or name_l.endswith(".xlsx") or name_l.endswith(".xls")):
             continue
         if dataset_filters and name not in dataset_filters:
@@ -1183,6 +1190,10 @@ def _load_domain_dataframes(
     return dfs, data_info, data_describe
 
 def _load_domain_attachments_text(domain: str, dataset_filters=None, max_chars=8000) -> dict:
+    """
+    🔧 FIX: Fungsi terpisah untuk load attachment text (PDF/DOCX).
+    Tidak akan digabung dengan dataframes.
+    """
     texts = {}
 
     # --- GCS ---
@@ -2165,7 +2176,7 @@ def datasets_read(domain, filename):
                     return jsonify({"detail": "File not found"}), 404
                 with open(local_path, "rb") as f:
                     data = f.read()
-            
+
             if as_fmt == "text":
                 if ext == ".pdf":
                     text = _extract_pdf_text(data, max_chars=20000)
@@ -2182,16 +2193,16 @@ def datasets_read(domain, filename):
                 mime = "application/pdf"
             elif ext == ".docx":
                 mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            else:  
+            else:
                 mime = "application/msword"
 
             return send_file(
                 io.BytesIO(data),
                 mimetype=mime,
-                as_attachment=False,      
+                as_attachment=False,
                 download_name=filename,
             )
-        
+
         if GCS_BUCKET:
             blob_name = f"{GCS_DATASETS_PREFIX}/{slug(domain)}/{filename}"
             df = read_gcs_tabular_to_pl_df(blob_name)  # ✅ a0.0.8
@@ -2211,7 +2222,7 @@ def datasets_read(domain, filename):
             out = io.StringIO()
             df.write_csv(out)
             return out.getvalue(), 200, {"Content-Type": "text/csv; charset=utf-8"}
-        
+
         return jsonify({"records": df.to_dicts()})
     except Exception as e:
         return jsonify({"detail": str(e)}), 500
@@ -2718,7 +2729,9 @@ def query():
 
         _cancel_if_needed(session_id)
 
-        # load data (Polars)
+        # 🔧 FIX: Load data secara terpisah
+        # - dfs: hanya file tabular (CSV/Excel) untuk EDA
+        # - attachments_text: file PDF/DOCX untuk context tambahan
         dfs, data_info, data_describe = _load_domain_dataframes(domain, dataset_filters)
         attachments_text = _load_domain_attachments_text(domain, dataset_filters)
 
@@ -2779,7 +2792,7 @@ def query():
                         "content": (
                             f"User Prompt:\n{prompt}\n\n"
                             f"Report Text (one or more PDF/DOCX files from domain '{domain}'):\n"
-                            f"{combined_reports[:12000]}"  
+                            f"{combined_reports[:12000]}"
                         ),
                     },
                 ],
