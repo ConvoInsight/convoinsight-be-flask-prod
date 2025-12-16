@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "ConvoInsight Local",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "convoinsight",
+      "Username": "convoinsight",
+      "SSLMode": "prefer",
+      "Comment": "Local development PostgreSQL database for ConvoInsight backend"
+    }
+  }
+}
