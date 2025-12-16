@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: convoinsight-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - convoinsight-network
+
+  # PostgreSQL for local development
+  postgres:
+    image: postgres:16-alpine
+    container_name: convoinsight-postgres
+    environment:
+      POSTGRES_USER: convoinsight
+      POSTGRES_PASSWORD: dev_password_change_in_production
+      POSTGRES_DB: convoinsight
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U convoinsight"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - convoinsight-network
+
+volumes:
+  redis_data:
+    driver: local
+  postgres_data:
+    driver: local
+
+networks:
+  convoinsight-network:
+    driver: bridge

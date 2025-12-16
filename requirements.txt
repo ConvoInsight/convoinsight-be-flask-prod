@@ -4,6 +4,10 @@ Flask==3.0.3
 Flask-Cors==4.0.0
 python-dotenv==1.0.1
 
+# --- caching & rate limiting ---
+redis==5.0.1
+flask-caching==2.1.0
+
 # --- data & LLM ---
 polars==1.21.0
 pandasai>=3.0.0b2
